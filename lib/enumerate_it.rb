@@ -261,6 +261,7 @@ module EnumerateIt
       set_validations attribute, options
       create_enumeration_humanize_method options[:with], attribute
       store_enumeration options[:with], attribute
+      create_symbol_methods options[:with], attribute
       if options[:create_helpers]
         create_helper_methods options[:with], attribute
         create_mutator_methods options[:with], attribute
@@ -279,6 +280,17 @@ module EnumerateIt
 
     def store_enumeration(klass, attribute)
       enumerations[attribute] = klass
+    end
+
+    def create_symbol_methods(klass, attribute_name)
+      class_eval do
+        define_method "#{attribute_name}_sym=" do |v|
+          self.send "#{attribute_name}=", (klass.enumeration[v.to_sym]||[]).first
+        end
+        define_method "#{attribute_name}_sym" do ||
+          klass.enumeration.detect {|k,v| v.first == self.send(attribute_name)}.first
+        end
+      end
     end
 
     def create_enumeration_humanize_method(klass, attribute_name)
