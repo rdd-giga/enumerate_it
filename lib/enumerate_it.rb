@@ -288,7 +288,7 @@ module EnumerateIt
           self.send "#{attribute_name}=", (klass.enumeration[v.to_sym]||[]).first
         end
         define_method "#{attribute_name}_sym" do ||
-          klass.enumeration.detect {|k,v| v.first == self.send(attribute_name)}.first
+          (klass.enumeration.detect {|k,v| v.first == self.send(attribute_name)} || []).first
         end
       end
     end
