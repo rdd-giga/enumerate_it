@@ -309,6 +309,9 @@ module EnumerateIt
           define_method "#{option}?" do
             self.send(attribute_name) == klass.enumeration[option].first
           end
+          define_method "#{attribute_name}_#{option}?" do
+            self.send(attribute_name) == klass.enumeration[option].first
+          end
         end
       end
     end
