@@ -1,50 +1,10 @@
 #encoding: utf-8
 require File.expand_path(File.dirname(__FILE__) + '/spec_helper')
 
-class TestEnumeration < EnumerateIt::Base
-  associate_values(
-    :value_1 => ['1', 'Hey, I am 1!'],
-    :value_2 => ['2', 'Hey, I am 2!'],
-    :value_3 => ['3', 'Hey, I am 3!']
-  )
-end
-
-class TestEnumerationWithoutArray < EnumerateIt::Base
-  associate_values(
-    :value_one => '1',
-    :value_two => '2'
-  )
-end
-
-class TestEnumerationWithExtendedBehaviour < EnumerateIt::Base
-  associate_values(
-    :first => '1',
-    :second => '2'
-  )
-  def self.to_a
-    super.reverse
-  end
-end
-
-class TestEnumerationWithList < EnumerateIt::Base
-  associate_values :first, :second
-end
-
-class Foobar < EnumerateIt::Base
-  associate_values(
-    :bar => 'foo'
-  )
-end
-
-class BaseClass
-  include EnumerateIt
-  has_enumeration_for :foobar, :with => TestEnumeration
-end
-
 describe EnumerateIt do
   before :each do
     class TestClass
-      include EnumerateIt
+      extend EnumerateIt
       attr_accessor :foobar
       has_enumeration_for :foobar, :with => TestEnumeration
 
@@ -73,6 +33,20 @@ describe EnumerateIt do
       TestClass.enumerations[:foobar].should == TestEnumeration
     end
 
+    context 'use the same enumeration from an inherited class' do
+      before do
+        class SomeClass < BaseClass
+        end
+        @target = SomeClass.new
+      end
+
+      it 'should have use the correct class' do
+        @base = BaseClass.new
+        @base.class.enumerations[:foobar].should == TestEnumeration
+        @target.class.enumerations[:foobar].should == TestEnumeration
+      end
+    end
+
     context 'declaring a simple enum on an inherited class' do
       before do
         class SomeClass < BaseClass
@@ -90,7 +64,7 @@ describe EnumerateIt do
     context "passing the value of each option without the human string (just the value, without an array)" do
       before :each do
         class TestClassForEnumerationWithoutArray
-          include EnumerateIt
+          extend EnumerateIt
           attr_accessor :foobar
           has_enumeration_for :foobar, :with => TestEnumerationWithoutArray
 
@@ -116,9 +90,11 @@ describe EnumerateIt do
     context "without passing the enumeration class" do
       before :each do
         class FooBar
-          include EnumerateIt
+          extend EnumerateIt
           attr_accessor :test_enumeration
+
           has_enumeration_for :test_enumeration
+
           def initialize(test_enumeration_value)
             @test_enumeration = test_enumeration_value
           end
@@ -128,6 +104,34 @@ describe EnumerateIt do
       it "should find out which enumeration class to use" do
         target = FooBar.new(TestEnumeration::VALUE_1)
         target.test_enumeration_humanize.should == 'Hey, I am 1!'
+      end
+
+      context "when using a nested class as the enumeration" do
+        before do
+          class NestedEnum < EnumerateIt::Base
+            associate_values :foo => ['1', 'Fooo'], :bar => ['2', 'Barrrr']
+          end
+
+          class ClassWithNestedEnum
+            class NestedEnum < EnumerateIt::Base
+              associate_values :foo => ['1', 'Blerrgh'], :bar => ['2' => 'Blarghhh']
+            end
+
+            extend EnumerateIt
+
+            attr_accessor :nested_enum
+
+            has_enumeration_for :nested_enum
+
+            def initialize(nested_enum_value)
+              @nested_enum = nested_enum_value
+            end
+          end
+        end
+
+        it "uses the inner class as the enumeration class" do
+          target = ClassWithNestedEnum.new('1').nested_enum_humanize.should == 'Blerrgh'
+        end
       end
     end
   end
@@ -156,33 +160,103 @@ describe EnumerateIt do
       target.value_3!
       target.foobar.should == TestEnumeration::VALUE_3
     end
+
+    context "with :prefix option" do
+      before :each do
+        class TestClass
+          has_enumeration_for :foobar, :with => TestEnumeration, :create_helpers => { :prefix => true }
+        end
+      end
+
+      it "creates helpers methods with question marks and prefixes for each enumeration option" do
+        target = TestClass.new(TestEnumeration::VALUE_2)
+        target.should be_foobar_value_2
+      end
+
+      it "creates a mutator method for each enumeration value" do
+        [:value_1, :value_2, :value_3].each do |value|
+          TestClass.new(TestEnumeration::VALUE_1).should respond_to(:"foobar_#{value}!")
+        end
+      end
+
+      it "changes the attribute's value through mutator methods" do
+        target = TestClass.new(TestEnumeration::VALUE_2)
+        target.foobar_value_3!
+        target.foobar.should == TestEnumeration::VALUE_3
+      end
+    end
+
+    context "with :polymorphic option" do
+      before :each do
+        class Polymorphic
+          extend EnumerateIt
+          attr_accessor :foo
+          has_enumeration_for :foo, :with => PolymorphicEnum, :create_helpers => { :polymorphic => true }
+        end
+      end
+
+      it "calls methods on the enum constants' objects" do
+        target = Polymorphic.new
+        target.foo = PolymorphicEnum::NORMAL
+
+        target.foo_object.print("Gol").should == "I'm Normal: Gol"
+
+        target.foo = PolymorphicEnum::CRAZY
+
+        target.foo_object.print("Gol").should == "Whoa!: Gol"
+      end
+
+      it "returns nil if foo is not set" do
+        target = Polymorphic.new
+
+        target.foo_object.should be_nil
+      end
+
+      context "and :suffix" do
+        before :each do
+          class Polymorphic
+            has_enumeration_for :foo, :with => PolymorphicEnum, :create_helpers => { :polymorphic => { :suffix => "_strategy" } }
+          end
+        end
+
+        it "calls methods on the enum constants' objects" do
+          target = Polymorphic.new
+          target.foo = PolymorphicEnum::NORMAL
+
+          target.foo_strategy.print("Gol").should == "I'm Normal: Gol"
+
+          target.foo = PolymorphicEnum::CRAZY
+
+          target.foo_strategy.print("Gol").should == "Whoa!: Gol"
+        end
+      end
+    end
   end
 
   describe "using the :create_scopes option" do
     def setup_enumeration
-      TestClass.send(:has_enumeration_for, :foobar, :with => TestEnumeration, :create_scopes => true)
+      OtherTestClass.send(:has_enumeration_for, :foobar, :with => TestEnumeration, :create_scopes => true)
     end
 
     context "if the hosting class responds to :scope" do
       before do
-        class TestClass
-          def self.where(whatever); end
-          def self.scope(name, whatever); end
+        class OtherTestClass < ActiveRecord::Base
+          extend EnumerateIt
         end
 
         setup_enumeration
       end
 
       it "creates a scope for each enumeration value" do
-        TestEnumeration.enumeration do |symbol, pair|
-          TestClass.should respond_to(symbol)
+        TestEnumeration.enumeration.keys.each do |symbol|
+          OtherTestClass.should respond_to(symbol)
         end
       end
 
       it "when called, the scopes create the correct query" do
-        TestEnumeration.enumeration do |symbol, pair|
-          TestClass.should_receive(:where).with(:foobar => pair.firs)
-          TestClass.send symbol
+        TestEnumeration.enumeration.each do |symbol, pair|
+          OtherTestClass.should_receive(:where).with(:foobar => pair.first)
+          OtherTestClass.send symbol
         end
       end
     end
@@ -197,118 +271,3 @@ describe EnumerateIt do
   end
 end
 
-describe EnumerateIt::Base do
-  it "creates constants for each enumeration value" do
-    [TestEnumeration::VALUE_1, TestEnumeration::VALUE_2, TestEnumeration::VALUE_3].each_with_index do |constant, idx|
-      constant.should == (idx + 1).to_s
-    end
-  end
-
-  it "creates a method that returns the allowed values in the enumeration's class" do
-    TestEnumeration.list.should == ['1', '2', '3']
-  end
-
-  it "creates a method that returns the enumeration specification" do
-    TestEnumeration.enumeration.should == {
-      :value_1 => ['1', 'Hey, I am 1!'],
-      :value_2 => ['2', 'Hey, I am 2!'],
-      :value_3 => ['3', 'Hey, I am 3!']
-    }
-  end
-
-  describe ".to_a" do
-    it "returns an array with the values and human representations" do
-      TestEnumeration.to_a.should == [['Hey, I am 1!', '1'], ['Hey, I am 2!', '2'], ['Hey, I am 3!', '3']]
-    end
-
-    it "translates the available values" do
-      TestEnumerationWithoutArray.to_a.should == [['First Value', '1'], ['Value Two', '2']]
-      I18n.locale = :pt
-      TestEnumerationWithoutArray.to_a.should == [['Primeiro Valor', '1'], ['Value Two', '2']]
-    end
-
-    it "can be extended from the enumeration class" do
-      TestEnumerationWithExtendedBehaviour.to_a.should == [['Second', '2'],['First','1']]
-    end
-  end
-
-  describe ".t" do
-    it "translates a given value" do
-      I18n.locale = :pt
-      TestEnumerationWithoutArray.t('1').should == 'Primeiro Valor'
-    end
-  end
-
-  describe "#to_range" do
-    it "returns a Range object containing the enumeration's value interval" do
-      TestEnumeration.to_range.should == ("1".."3")
-    end
-  end
-
-  describe ".values_for" do
-    it "returns an array with the corresponding values for a string array representing some of the enumeration's values" do
-      TestEnumeration.values_for(%w(VALUE_1 VALUE_2)).should == [TestEnumeration::VALUE_1, TestEnumeration::VALUE_2]
-    end
-  end
-
-  context 'associate values with a list' do
-    it "creates constants for each enumeration value" do
-      TestEnumerationWithList::FIRST.should == "first"
-      TestEnumerationWithList::SECOND.should == "second"
-    end
-
-    it "returns an array with the values and human representations" do
-      TestEnumerationWithList.to_a.should == [['First', 'first'], ['Second', 'second']]
-    end
-  end
-
-  context "when included in ActiveRecord::Base" do
-    before :each do
-      class ActiveRecordStub
-        attr_accessor :bla
-
-        class << self
-          def validates_inclusion_of(options); true; end
-          def validates_presence_of; true; end
-        end
-      end
-
-      ActiveRecordStub.stub!(:validates_inclusion_of).and_return(true)
-      ActiveRecordStub.send :include, EnumerateIt
-    end
-
-    it "creates a validation for inclusion" do
-      ActiveRecordStub.should_receive(:validates_inclusion_of).with(:bla, :in => TestEnumeration.list, :allow_blank => true)
-      class ActiveRecordStub
-        has_enumeration_for :bla, :with => TestEnumeration
-      end
-    end
-
-    context "using the :required option" do
-      before :each do
-        ActiveRecordStub.stub!(:validates_presence_of).and_return(true)
-      end
-
-      it "creates a validation for presence" do
-        ActiveRecordStub.should_receive(:validates_presence_of)
-        class ActiveRecordStub
-          has_enumeration_for :bla, :with => TestEnumeration, :required => true
-        end
-      end
-
-      it "passes the given options to the validation method" do
-        ActiveRecordStub.should_receive(:validates_presence_of).with(:bla, :if => :some_method)
-        class ActiveRecordStub
-          has_enumeration_for :bla, :with => TestEnumeration, :required => { :if => :some_method }
-        end
-      end
-
-      it "do not require the attribute by default" do
-        ActiveRecordStub.should_not_receive(:validates_presence_of)
-        class ActiveRecordStub
-          has_enumeration_for :bla, :with => TestEnumeration
-        end
-      end
-    end
-  end
-end
