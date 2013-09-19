@@ -7,6 +7,7 @@ module EnumerateIt
       define_enumeration_class attribute, options
       set_validations attribute, options
       create_enumeration_humanize_method options[:with], attribute
+      create_enumeration_symbol_methods options[:with], attribute
       store_enumeration options[:with], attribute
 
       if options[:create_helpers]
@@ -25,6 +26,20 @@ module EnumerateIt
       enumerations[attribute] = klass
     end
 
+    def create_enumeration_symbol_methods(klass, attribute_name)
+      class_eval do
+        define_method "#attribute_name}_sym" do
+          values = klass.enumeration.values.detect { |v| v[0] == self.send(attribute_name) }
+
+          values ? klass.translate(values[1]) : nil
+        end
+
+        define_method "#attribute_name}_sym=" do |value|
+          self.send "#{attribute_name}=", (klass.enumeration[value.to_sym] || []).first
+        end
+      end
+    end
+
     def create_enumeration_humanize_method(klass, attribute_name)
       class_eval do
         define_method "#{attribute_name}_humanize" do
@@ -41,6 +56,10 @@ module EnumerateIt
       class_eval do
         klass.enumeration.keys.each do |option|
           define_method "#{prefix_name}#{option}?" do
+            self.send(attribute_name) == klass.enumeration[option].first
+          end
+
+          define_method "#{prefix_name}_#{option}?" do
             self.send(attribute_name) == klass.enumeration[option].first
           end
         end
