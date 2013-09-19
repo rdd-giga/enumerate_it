@@ -28,13 +28,13 @@ module EnumerateIt
 
     def create_enumeration_symbol_methods(klass, attribute_name)
       class_eval do
-        define_method "#attribute_name}_sym" do
+        define_method "#{attribute_name}_sym" do
           values = klass.enumeration.values.detect { |v| v[0] == self.send(attribute_name) }
 
           values ? klass.translate(values[1]) : nil
         end
 
-        define_method "#attribute_name}_sym=" do |value|
+        define_method "#{attribute_name}_sym=" do |value|
           self.send "#{attribute_name}=", (klass.enumeration[value.to_sym] || []).first
         end
       end
