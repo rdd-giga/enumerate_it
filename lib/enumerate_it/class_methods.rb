@@ -31,7 +31,7 @@ module EnumerateIt
         define_method "#{attribute_name}_sym" do
           values = klass.enumeration.values.detect { |v| v[0] == self.send(attribute_name) }
 
-          values ? klass.translate(values[1]) : nil
+          values ? klass.key_for(values[0]) : nil
         end
 
         define_method "#{attribute_name}_sym=" do |value|

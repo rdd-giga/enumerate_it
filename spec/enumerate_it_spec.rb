@@ -25,6 +25,15 @@ describe EnumerateIt do
       @target.foobar_humanize.should be_nil
     end
 
+    it "creates an symbol getter method for the attribute's value" do
+      @target.foobar_sym.should == :value_2
+    end
+
+    it "creates an symbol setter method for the attribute's value" do
+      @target.foobar_sym = :value_1
+      @target.foobar_humanize.should == 'Hey, I am 1!'
+    end
+
     it "defaults to not creating helper methods" do
       @target.should_not respond_to(:value_1?)
     end
